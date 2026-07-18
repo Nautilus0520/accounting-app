@@ -237,7 +237,7 @@
       <label>基本時給（円／時間）</label>
       <input type="number" id="wage-rate" placeholder="例：1000" min="0" step="10">
       <button class="btn" style="background:var(--terracotta-dark); color:#fff;" onclick="saveWageRate()">時給を保存する</button>
-      <div class="note">※ここで設定した時給 ×作業時間 が、下で作業時間を保存するたびに自動で「人件費」として支出に記録されます。</div>
+      <div class="note">※ここで設定した時給 ×作業時間 ×作業人数 が、下で作業時間を保存するたびに自動で「人件費」として支出に記録されます。</div>
     </div>
 
     <div class="card">
@@ -247,7 +247,9 @@
       <label>作業内容</label>
       <input type="text" id="lab-task" placeholder="例：コンポスト切り返し・種まき">
       <label>作業時間（時間）</label>
-      <input type="number" id="lab-hours" placeholder="例：2.5" min="0" step="0.5">
+      <input type="number" id="lab-hours" placeholder="例：2.5" min="0" step="0.5" value="2">
+      <label>作業人数（人）</label>
+      <input type="number" id="lab-workers" placeholder="例：3" min="1" step="1" value="3">
       <label>メモ（任意）</label>
       <input type="text" id="lab-memo" placeholder="">
       <div class="note" id="lab-cost-preview"></div>
@@ -435,11 +437,13 @@ async function saveWageRate(){
 
 function updateLaborCostPreview(){
   const hours = Number(document.getElementById('lab-hours').value) || 0;
-  const cost = hours * (settings.hourlyRate || 0);
+  const workers = Number(document.getElementById('lab-workers').value) || 1;
+  const cost = hours * workers * (settings.hourlyRate || 0);
   document.getElementById('lab-cost-preview').textContent =
-    hours > 0 ? `人件費として ${yen(cost)}（${hours}時間 × ${yen(settings.hourlyRate)}）が支出に自動記録されます` : '';
+    hours > 0 ? `人件費として ${yen(cost)}（${hours}時間 × ${workers}人 × ${yen(settings.hourlyRate)}）が支出に自動記録されます` : '';
 }
 document.getElementById('lab-hours').addEventListener('input', updateLaborCostPreview);
+document.getElementById('lab-workers').addEventListener('input', updateLaborCostPreview);
 
 function fileToBase64(file){
   return new Promise((resolve, reject)=>{
@@ -582,20 +586,22 @@ async function addLabor(){
   const date = document.getElementById('lab-date').value || todayStr();
   const task = document.getElementById('lab-task').value.trim();
   const hours = Number(document.getElementById('lab-hours').value);
+  const workers = Number(document.getElementById('lab-workers').value) || 1;
   const memo = document.getElementById('lab-memo').value.trim();
   if(!task){ showToast('作業内容を入力してください'); return; }
   if(!hours || hours<=0){ showToast('作業時間を入力してください'); return; }
+  if(!workers || workers<=0){ showToast('作業人数を入力してください'); return; }
 
   const rate = settings.hourlyRate || 0;
-  const cost = Math.round(hours * rate);
+  const cost = Math.round(hours * workers * rate);
   const laborId = genId();
 
-  labors.push({id:laborId, date, task, hours, memo, rate, cost});
+  labors.push({id:laborId, date, task, hours, workers, memo, rate, cost});
   labors.sort((a,b)=> a.date < b.date ? 1 : -1);
 
   expenses.push({
     id:genId(), date, category:'人件費',
-    amount:cost, memo:`${task}（${hours}時間×${yen(rate)}）`,
+    amount:cost, memo:`${task}（${hours}時間×${workers}人×${yen(rate)}）`,
     receipt:'', by:'', laborId
   });
   expenses.sort((a,b)=> a.date < b.date ? 1 : -1);
@@ -605,6 +611,7 @@ async function addLabor(){
   if(ok1 && ok2){
     showToast(`作業時間を保存し、人件費 ${yen(cost)} を支出に記録しました`);
     ['lab-task','lab-hours','lab-memo'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('lab-workers').value = '1';
     document.getElementById('lab-cost-preview').textContent = '';
     renderAll();
     switchView('summary');
@@ -704,7 +711,7 @@ function renderHistory(){
       amtHtml = `<span class="entry-amt amt-income">＋${yen(x.amount)}</span>`;
     } else {
       main = escapeHtml(x.task||'作業');
-      sub = x.date + (x.memo ? '　'+escapeHtml(x.memo) : '') + (x.cost ? '　人件費 '+yen(x.cost) : '');
+      sub = x.date + `　${x.workers||1}人` + (x.memo ? '　'+escapeHtml(x.memo) : '') + (x.cost ? '　人件費 '+yen(x.cost) : '');
       amtHtml = `<span class="entry-amt" style="color:var(--terracotta-dark);">${x.hours}時間</span>`;
     }
     row.innerHTML = `
@@ -731,7 +738,7 @@ function exportExcel(){
     日付:x.date, 項目:x.source, 金額:x.amount, 内容:x.memo||'', 入力者:x.by||''
   }));
   const laborSheet = labors.map(x=>({
-    日付:x.date, 作業内容:x.task||'', 作業時間:x.hours, 時給:x.rate||settings.hourlyRate, 人件費:x.cost||(x.hours*(x.rate||settings.hourlyRate)), メモ:x.memo||''
+    日付:x.date, 作業内容:x.task||'', 作業時間:x.hours, 作業人数:x.workers||1, 時給:x.rate||settings.hourlyRate, 人件費:x.cost||(x.hours*(x.workers||1)*(x.rate||settings.hourlyRate)), メモ:x.memo||''
   }));
 
   const totalIncome = incomes.reduce((s,x)=>s+x.amount,0);
