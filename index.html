@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>smilesoilfarm プロジェクト家計簿</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1E3A4C">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="家計簿">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<style>
+  :root{
+    --cream:#EAF1F5;
+    --tan:#D7E6EE;
+    --tan2:#E3EDF3;
+    --brown-dark:#1E3A4C;
+    --ink:#1F2E37;
+    --terracotta:#3B7EA1;
+    --terracotta-dark:#2E5C7A;
+    --sage:#3D9188;
+    --sage-dark:#2A6E66;
+    --green-deep:#1E3A4C;
+    --line:#BBD3E0;
+    --red:#B34A3C;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:"Hiragino Sans","Noto Sans JP",sans-serif;
+    background:var(--cream); color:var(--ink); padding-bottom:40px;
+  }
+  header{
+    background:var(--brown-dark); color:#E3EDF3; padding:20px 16px 16px;
+  }
+  header h1{ margin:0 0 4px; font-size:18px; }
+  header p{ margin:0; font-size:12px; color:#AEC9D8; }
+
+  nav{
+    display:flex; overflow-x:auto; background:#16293A; position:sticky; top:0; z-index:10;
+  }
+  nav button{
+    flex:0 0 auto; background:none; border:none; color:#AEC9D8; padding:12px 16px;
+    font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; border-bottom:3px solid transparent;
+  }
+  nav button.active{ color:#fff; border-bottom-color:var(--terracotta); }
+
+  main{ max-width:640px; margin:0 auto; padding:16px; }
+  .view{ display:none; }
+  .view.active{ display:block; }
+
+  .card{
+    background:#fff; border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:14px;
+  }
+  .card h2{ font-size:14px; margin:0 0 10px; color:var(--green-deep); }
+
+  .stat-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
+  .stat-box{
+    background:var(--tan2); border-radius:10px; padding:14px; text-align:center;
+  }
+  .stat-box .label{ font-size:11px; color:#4A6478; margin-bottom:4px; }
+  .stat-box .value{ font-size:20px; font-weight:900; }
+  .stat-box.balance .value{ color:var(--sage-dark); }
+  .stat-box.income .value{ color:var(--sage-dark); }
+  .stat-box.expense .value{ color:var(--red); }
+  .stat-box.hours .value{ color:var(--terracotta-dark); }
+
+  table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  th,td{ text-align:left; padding:6px 4px; border-bottom:1px solid #eee; }
+  th{ color:#4A6478; font-weight:700; font-size:11px; }
+
+  label{ display:block; font-size:12px; color:#4A6478; margin:10px 0 4px; }
+  input, select, textarea{
+    width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:8px;
+    font-size:14px; font-family:inherit; background:#F5FAFC;
+  }
+  textarea{ resize:vertical; min-height:50px; }
+
+  .btn{
+    display:inline-block; width:100%; margin-top:14px; padding:12px; border:none; border-radius:100px;
+    font-weight:700; font-size:14px; cursor:pointer;
+  }
+  .btn-expense{ background:var(--red); color:#fff; }
+  .btn-income{ background:var(--sage-dark); color:#fff; }
+  .btn-labor{ background:var(--terracotta); color:#14283A; }
+
+  .entry-row{
+    display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid #eee;
+  }
+  .entry-row:last-child{ border-bottom:none; }
+  .entry-main{ font-size:13px; }
+  .entry-sub{ font-size:11px; color:#5C7A8C; }
+  .entry-amt{ font-weight:900; font-size:14px; white-space:nowrap; margin-left:8px; }
+  .amt-income{ color:var(--sage-dark); }
+  .amt-expense{ color:var(--red); }
+  .del-btn{
+    background:none; border:none; color:#7FA0B3; font-size:16px; cursor:pointer; padding:4px 8px;
+  }
+
+  .filter-row{ display:flex; gap:8px; margin-bottom:10px; }
+  .filter-row select{ width:auto; flex:1; }
+
+  .empty{ text-align:center; color:#6C8AA0; font-size:13px; padding:24px 0; }
+  .note{ font-size:11px; color:#5C7A8C; margin-top:8px; line-height:1.6; }
+  .scan-box{
+    background:var(--tan2); border:1px dashed var(--terracotta); border-radius:10px; padding:12px 14px; margin-bottom:6px;
+  }
+  #scan-status{ font-size:12px; color:#5C7A8C; margin-top:8px; min-height:16px; }
+  #scan-status.ok{ color:var(--sage-dark); font-weight:700; }
+  #scan-status.err{ color:var(--red); font-weight:700; }
+  .loading{ text-align:center; padding:40px; color:#5C7A8C; }
+  .toast{
+    position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+    background:var(--brown-dark); color:#E3EDF3; padding:10px 20px; border-radius:100px;
+    font-size:13px; opacity:0; transition:opacity 0.3s; pointer-events:none; z-index:100;
+  }
+  .toast.show{ opacity:1; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🌱 smilesoilfarm プロジェクト家計簿</h1>
+  <p>支出・収入・作業時間をまとめて記録します</p>
+</header>
+
+<nav id="tabs">
+  <button data-view="summary" class="active">収支サマリー</button>
+  <button data-view="expense">支出を記録</button>
+  <button data-view="income">収入を記録</button>
+  <button data-view="labor">作業時間を記録</button>
+  <button data-view="history">履歴一覧</button>
+</nav>
+
+<div id="debug-banner" style="display:none; background:#B34A3C; color:#fff; font-size:12px; padding:10px 16px; line-height:1.6; word-break:break-all;">
+  <div id="debug-text"></div>
+  <button onclick="document.getElementById('debug-banner').style.display='none'" style="margin-top:6px; background:rgba(255,255,255,0.2); border:none; color:#fff; padding:4px 10px; border-radius:6px; font-size:11px;">閉じる</button>
+</div>
+
+<main>
+  <div id="loading" class="loading">読み込み中…</div>
+
+  <!-- SUMMARY -->
+  <section id="view-summary" class="view active">
+    <div class="stat-grid">
+      <div class="stat-box income"><div class="label">総収入</div><div class="value" id="sum-income">¥0</div></div>
+      <div class="stat-box expense"><div class="label">総支出</div><div class="value" id="sum-expense">¥0</div></div>
+      <div class="stat-box balance"><div class="label">収支残高</div><div class="value" id="sum-balance">¥0</div></div>
+      <div class="stat-box hours"><div class="label">合計作業時間</div><div class="value" id="sum-hours">0時間</div></div>
+    </div>
+
+    <div class="card">
+      <h2>支出のカテゴリ内訳</h2>
+      <table id="cat-table"><tbody></tbody></table>
+      <div class="empty" id="cat-empty" style="display:none;">まだ支出の記録がありません</div>
+    </div>
+
+    <div class="card">
+      <h2>最近の収支</h2>
+      <div id="recent-list"></div>
+      <div class="empty" id="recent-empty" style="display:none;">まだ記録がありません</div>
+    </div>
+
+    <button class="btn" style="background:var(--sage-dark); color:#fff;" onclick="exportExcel()">📊 Excelで収支表をダウンロード</button>
+  </section>
+
+  <!-- EXPENSE FORM -->
+  <section id="view-expense" class="view">
+    <div class="card">
+      <h2>支出を記録する</h2>
+
+      <div class="scan-box">
+        <label style="margin-top:0;">📷 レシートを撮影・アップロードして自動入力</label>
+        <input type="file" id="exp-receipt-img" accept="image/*" capture="environment" onchange="scanReceipt(event)">
+        <div id="scan-status"></div>
+        <div style="font-size:11px; color:#5C7A8C; margin-top:6px;">※日付・金額・内容・カテゴリを自動で下に入力します。保存前に内容を確認してください。画像自体は保存されません。</div>
+        <div id="apikey-box" style="display:none; margin-top:10px; padding-top:10px; border-top:1px dashed var(--terracotta);">
+          <label style="margin-top:0;">Anthropic APIキー（このブラウザにのみ保存されます）</label>
+          <input type="password" id="api-key-input" placeholder="sk-ant-...">
+          <button class="btn" style="background:var(--terracotta-dark); color:#fff; margin-top:8px;" onclick="saveApiKey()">APIキーを保存</button>
+          <div class="note">GitHub Pages版などClaude以外の場所でレシート読み取りを使うには、<a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>で取得したAPIキーが必要です。キーは共有バックエンドには送られず、この端末のブラウザだけに保存されます。</div>
+        </div>
+      </div>
+
+      <label>日付</label>
+      <input type="date" id="exp-date">
+      <label>カテゴリ</label>
+      <select id="exp-category">
+        <option>資材費（コンポスト関連）</option>
+        <option>苗・種代</option>
+        <option>運搬費</option>
+        <option>水道光熱費</option>
+        <option>備品・工具</option>
+        <option>人件費</option>
+        <option>その他</option>
+      </select>
+      <label>金額（円）</label>
+      <input type="number" id="exp-amount" placeholder="例：2500" min="0">
+      <label>内容・メモ</label>
+      <input type="text" id="exp-memo" placeholder="例：コンポスト用の腐葉土">
+      <label>レシート番号・保管場所（任意）</label>
+      <input type="text" id="exp-receipt" placeholder="例：レシートNo.12／写真フォルダ7月">
+      <label>入力者</label>
+      <input type="text" id="exp-by" placeholder="例：土居">
+      <button class="btn btn-expense" onclick="addExpense()">支出を保存する</button>
+    </div>
+  </section>
+
+  <!-- INCOME FORM -->
+  <section id="view-income" class="view">
+    <div class="card">
+      <h2>収入を記録する</h2>
+      <label>日付</label>
+      <input type="date" id="inc-date">
+      <label>項目</label>
+      <select id="inc-source">
+        <option>苗の販売</option>
+        <option>野菜の販売</option>
+        <option>寄付</option>
+        <option>その他</option>
+      </select>
+      <label>金額（円）</label>
+      <input type="number" id="inc-amount" placeholder="例：1000" min="0">
+      <label>内容・メモ（購入者など）</label>
+      <input type="text" id="inc-memo" placeholder="例：トマト苗5個　地域直売所にて">
+      <label>入力者</label>
+      <input type="text" id="inc-by" placeholder="例：土居">
+      <button class="btn btn-income" onclick="addIncome()">収入を保存する</button>
+    </div>
+  </section>
+
+  <!-- LABOR FORM -->
+  <section id="view-labor" class="view">
+    <div class="card">
+      <h2>⚙️ 時給の設定</h2>
+      <label>基本時給（円／時間）</label>
+      <input type="number" id="wage-rate" placeholder="例：1000" min="0" step="10">
+      <button class="btn" style="background:var(--terracotta-dark); color:#fff;" onclick="saveWageRate()">時給を保存する</button>
+      <div class="note">※ここで設定した時給 ×作業時間 が、下で作業時間を保存するたびに自動で「人件費」として支出に記録されます。</div>
+    </div>
+
+    <div class="card">
+      <h2>作業時間を記録する</h2>
+      <label>日付</label>
+      <input type="date" id="lab-date">
+      <label>作業内容</label>
+      <input type="text" id="lab-task" placeholder="例：コンポスト切り返し・種まき">
+      <label>作業時間（時間）</label>
+      <input type="number" id="lab-hours" placeholder="例：2.5" min="0" step="0.5">
+      <label>メモ（任意）</label>
+      <input type="text" id="lab-memo" placeholder="">
+      <div class="note" id="lab-cost-preview"></div>
+      <button class="btn btn-labor" onclick="addLabor()">作業時間を保存する（自動で人件費を支出に記録）</button>
+    </div>
+  </section>
+
+  <!-- HISTORY -->
+  <section id="view-history" class="view">
+    <div class="card">
+      <div class="filter-row">
+        <select id="hist-filter" onchange="renderHistory()">
+          <option value="all">すべて</option>
+          <option value="expense">支出のみ</option>
+          <option value="income">収入のみ</option>
+          <option value="labor">作業時間のみ</option>
+        </select>
+      </div>
+      <div id="history-list"></div>
+      <div class="empty" id="history-empty" style="display:none;">記録がありません</div>
+    </div>
+  </section>
+
+  <p class="note" style="text-align:center;">
+    ※このデータはこの家計簿を開いたメンバー全員で共有されます。金額や作業時間は各自の入力内容がそのまま反映されます。
+  </p>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<div class="toast" id="toast"></div>
+
+<script>
+// ここにGoogle Apps ScriptのWebアプリURLを貼ると、GitHub Pages版と
+// Claudeアーティファクト版のデータが同じバックエンドを通じて同期されます。
+// 空のままなら、Claudeアーティファクト内だけで完結する共有ストレージを使います。
+// GitHub Pagesなど、Claude以外の場所にデプロイする場合に使うバックエンド。
+// Claude内で開いているときは（外部サイトへ接続できないため）常に内部の共有ストレージを使い、
+// このURLは無視されます。GitHub Pages版でのみ有効になります。
+const BACKEND_URL = "https://script.google.com/macros/s/AKfycbwLOeG9ILNxAumVvWNXfNF2VwGp5jzaUD75l3Zib4oysqe7OBUJ5NFbfgm1nFICutsF/exec";
+
+// Claudeのアーティファクト内かどうかを判定（window.storageが使えるのはClaude内だけ）
+const IN_CLAUDE = (typeof window.storage !== 'undefined');
+
+let expenses = [];
+let incomes = [];
+let labors = [];
+let settings = { hourlyRate: 1000 };
+
+const yen = n => '¥' + Number(n||0).toLocaleString('ja-JP');
+const todayStr = () => new Date().toISOString().slice(0,10);
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 1800);
+}
+
+function showError(msg){
+  console.error(msg);
+  const banner = document.getElementById('debug-banner');
+  document.getElementById('debug-text').textContent = '⚠️ ' + msg;
+  banner.style.display = 'block';
+  banner.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function switchView(name){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+name).classList.add('active');
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active', b.dataset.view===name));
+}
+document.getElementById('tabs').addEventListener('click', e=>{
+  if(e.target.tagName==='BUTTON'){ switchView(e.target.dataset.view); }
+});
+
+function genId(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+async function loadAll(){
+  try{
+    const [e,i,l,s] = await Promise.all([
+      safeGet('ledger-expenses'),
+      safeGet('ledger-incomes'),
+      safeGet('ledger-labor'),
+      safeGet('ledger-settings')
+    ]);
+    expenses = e || [];
+    incomes = i || [];
+    labors = l || [];
+    settings = s || { hourlyRate: 1000 };
+  } catch(err){
+    showError('データの読み込みに失敗しました：' + err.message);
+  }
+  document.getElementById('wage-rate').value = settings.hourlyRate;
+  document.getElementById('loading').style.display = 'none';
+  renderAll();
+}
+
+// ---- storage adapter ----
+// Claude内：常に共有ストレージ（window.storage）を使用（外部サイトへは接続できないため）
+// Claude外（GitHub Pagesなど）：BACKEND_URLが設定されていればそちらを使用
+async function storageGet(key){
+  if(IN_CLAUDE){
+    const res = await window.storage.get(key, true);
+    return res ? JSON.parse(res.value) : null;
+  }
+  if(!BACKEND_URL){
+    throw new Error('BACKEND_URLが設定されていません。コード内のBACKEND_URLにApps ScriptのURLを貼ってください。');
+  }
+  let res;
+  try{
+    res = await fetch(BACKEND_URL + '?key=' + encodeURIComponent(key));
+  } catch(networkErr){
+    throw new Error(`バックエンドに接続できません（ネットワーク/CORSエラー）: ${networkErr.message}`);
+  }
+  const text = await res.text();
+  if(!res.ok){
+    throw new Error(`読み込み失敗 HTTP ${res.status}：${text.slice(0,200)}`);
+  }
+  if(!text || text === 'null') return null;
+  try{
+    return JSON.parse(text);
+  } catch(parseErr){
+    throw new Error(`読み込んだデータの形式が不正です：${text.slice(0,200)}`);
+  }
+}
+
+async function storageSet(key, value){
+  if(IN_CLAUDE){
+    const res = await window.storage.set(key, JSON.stringify(value), true);
+    return !!res;
+  }
+  if(!BACKEND_URL){
+    throw new Error('BACKEND_URLが設定されていません。コード内のBACKEND_URLにApps ScriptのURLを貼ってください。');
+  }
+  let res;
+  try{
+    res = await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ key, value: JSON.stringify(value) })
+    });
+  } catch(networkErr){
+    throw new Error(`バックエンドに接続できません（ネットワーク/CORSエラー）: ${networkErr.message}`);
+  }
+  const text = await res.text();
+  if(!res.ok){
+    throw new Error(`保存失敗 HTTP ${res.status}：${text.slice(0,200)}`);
+  }
+  let parsed;
+  try{ parsed = JSON.parse(text); } catch(e){ parsed = null; }
+  if(!parsed || parsed.ok !== true){
+    throw new Error(`保存APIの応答が想定と異なります：${text.slice(0,200)}`);
+  }
+  return true;
+}
+
+async function safeGet(key){
+  try{
+    const v = await storageGet(key);
+    return v === null ? [] : v;
+  } catch(err){
+    showError('読み込みエラー：' + err.message);
+    return [];
+  }
+}
+
+async function saveKey(key, data){
+  try{
+    const ok = await storageSet(key, data);
+    if(!ok){ showError('保存に失敗しました（原因不明）'); return false; }
+    return true;
+  } catch(err){
+    showError('保存エラー：' + err.message);
+    return false;
+  }
+}
+
+async function saveWageRate(){
+  const rate = Number(document.getElementById('wage-rate').value);
+  if(!rate || rate<=0){ showToast('時給を入力してください'); return; }
+  settings.hourlyRate = rate;
+  const ok = await saveKey('ledger-settings', settings);
+  if(ok){ showToast('時給を保存しました（' + yen(rate) + '／時間）'); updateLaborCostPreview(); }
+}
+
+function updateLaborCostPreview(){
+  const hours = Number(document.getElementById('lab-hours').value) || 0;
+  const cost = hours * (settings.hourlyRate || 0);
+  document.getElementById('lab-cost-preview').textContent =
+    hours > 0 ? `人件費として ${yen(cost)}（${hours}時間 × ${yen(settings.hourlyRate)}）が支出に自動記録されます` : '';
+}
+document.getElementById('lab-hours').addEventListener('input', updateLaborCostPreview);
+
+function fileToBase64(file){
+  return new Promise((resolve, reject)=>{
+    const r = new FileReader();
+    r.onload = () => resolve(r.result.split(',')[1]);
+    r.onerror = () => reject(new Error('ファイルの読み込みに失敗しました'));
+    r.readAsDataURL(file);
+  });
+}
+
+const CATEGORY_OPTIONS = ['資材費（コンポスト関連）','苗・種代','運搬費','水道光熱費','備品・工具','人件費','その他'];
+
+// APIキー（Claude以外の環境でのみ、このブラウザのlocalStorageに保存）
+function loadApiKeyField(){
+  if(IN_CLAUDE) return;
+  document.getElementById('apikey-box').style.display = 'block';
+  const saved = localStorage.getItem('smilesoilfarm-api-key');
+  if(saved) document.getElementById('api-key-input').value = saved;
+}
+function saveApiKey(){
+  if(IN_CLAUDE) return;
+  const key = document.getElementById('api-key-input').value.trim();
+  if(!key){ showToast('APIキーを入力してください'); return; }
+  localStorage.setItem('smilesoilfarm-api-key', key);
+  showToast('APIキーを保存しました');
+}
+
+async function scanReceipt(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const statusEl = document.getElementById('scan-status');
+  statusEl.className = '';
+  statusEl.textContent = '読み取り中…';
+
+  let apiKey = null;
+  if(!IN_CLAUDE){
+    apiKey = localStorage.getItem('smilesoilfarm-api-key');
+    if(!apiKey){
+      statusEl.className = 'err';
+      statusEl.textContent = '下の欄にAnthropic APIキーを保存してから読み取ってください。';
+      return;
+    }
+  }
+
+  try{
+    const base64 = await fileToBase64(file);
+    const mediaType = file.type || 'image/jpeg';
+
+    const headers = { 'Content-Type': 'application/json' };
+    if(!IN_CLAUDE){
+      headers['x-api-key'] = apiKey;
+      headers['anthropic-version'] = '2023-06-01';
+      headers['anthropic-dangerous-direct-browser-access'] = 'true';
+    }
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 500,
+        messages: [{
+          role: 'user',
+          content: [
+            { type:'image', source:{ type:'base64', media_type: mediaType, data: base64 } },
+            { type:'text', text:
+              'このレシート画像を読み取り、次のJSON形式のみを出力してください。説明文やコードブロック記号は一切付けないでください。\n' +
+              '{"date":"YYYY-MM-DD","amount":数値,"memo":"店名や購入内容を20文字以内で要約","category":"次の6つから最も近いもの一つ：資材費（コンポスト関連）／苗・種代／運搬費／水道光熱費／備品・工具／その他"}\n' +
+              '読み取れない項目はnullにしてください。金額は税込合計金額を数値のみで（円やカンマは付けない）。'
+            }
+          ]
+        }]
+      })
+    });
+
+    if(!response.ok){
+      const errText = await response.text().catch(()=> '');
+      throw new Error(`API error ${response.status}: ${errText.slice(0,200)}`);
+    }
+    const data = await response.json();
+    const textBlock = (data.content || []).find(b => b.type === 'text');
+    if(!textBlock){ throw new Error('no text in response'); }
+
+    const cleaned = textBlock.text.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(cleaned);
+
+    if(parsed.date){ document.getElementById('exp-date').value = parsed.date; }
+    if(parsed.amount){ document.getElementById('exp-amount').value = parsed.amount; }
+    if(parsed.memo){ document.getElementById('exp-memo').value = parsed.memo; }
+    if(parsed.category && CATEGORY_OPTIONS.includes(parsed.category)){
+      document.getElementById('exp-category').value = parsed.category;
+    }
+
+    statusEl.className = 'ok';
+    statusEl.textContent = '読み取りました。内容を確認して「支出を保存する」を押してください。';
+  } catch(err){
+    statusEl.className = 'err';
+    statusEl.textContent = '読み取りに失敗しました：' + err.message;
+  }
+}
+
+async function addExpense(){
+  const date = document.getElementById('exp-date').value || todayStr();
+  const category = document.getElementById('exp-category').value;
+  const amount = Number(document.getElementById('exp-amount').value);
+  const memo = document.getElementById('exp-memo').value.trim();
+  const receipt = document.getElementById('exp-receipt').value.trim();
+  const by = document.getElementById('exp-by').value.trim();
+  if(!amount || amount<=0){ showToast('金額を入力してください'); return; }
+  expenses.push({id:genId(), date, category, amount, memo, receipt, by});
+  expenses.sort((a,b)=> a.date < b.date ? 1 : -1);
+  const ok = await saveKey('ledger-expenses', expenses);
+  if(ok){
+    showToast('支出を保存しました');
+    ['exp-amount','exp-memo','exp-receipt'].forEach(id=>document.getElementById(id).value='');
+    renderAll();
+    switchView('summary');
+  }
+}
+
+async function addIncome(){
+  const date = document.getElementById('inc-date').value || todayStr();
+  const source = document.getElementById('inc-source').value;
+  const amount = Number(document.getElementById('inc-amount').value);
+  const memo = document.getElementById('inc-memo').value.trim();
+  const by = document.getElementById('inc-by').value.trim();
+  if(!amount || amount<=0){ showToast('金額を入力してください'); return; }
+  incomes.push({id:genId(), date, source, amount, memo, by});
+  incomes.sort((a,b)=> a.date < b.date ? 1 : -1);
+  const ok = await saveKey('ledger-incomes', incomes);
+  if(ok){
+    showToast('収入を保存しました');
+    ['inc-amount','inc-memo'].forEach(id=>document.getElementById(id).value='');
+    renderAll();
+    switchView('summary');
+  }
+}
+
+async function addLabor(){
+  const date = document.getElementById('lab-date').value || todayStr();
+  const task = document.getElementById('lab-task').value.trim();
+  const hours = Number(document.getElementById('lab-hours').value);
+  const memo = document.getElementById('lab-memo').value.trim();
+  if(!task){ showToast('作業内容を入力してください'); return; }
+  if(!hours || hours<=0){ showToast('作業時間を入力してください'); return; }
+
+  const rate = settings.hourlyRate || 0;
+  const cost = Math.round(hours * rate);
+  const laborId = genId();
+
+  labors.push({id:laborId, date, task, hours, memo, rate, cost});
+  labors.sort((a,b)=> a.date < b.date ? 1 : -1);
+
+  expenses.push({
+    id:genId(), date, category:'人件費',
+    amount:cost, memo:`${task}（${hours}時間×${yen(rate)}）`,
+    receipt:'', by:'', laborId
+  });
+  expenses.sort((a,b)=> a.date < b.date ? 1 : -1);
+
+  const ok1 = await saveKey('ledger-labor', labors);
+  const ok2 = await saveKey('ledger-expenses', expenses);
+  if(ok1 && ok2){
+    showToast(`作業時間を保存し、人件費 ${yen(cost)} を支出に記録しました`);
+    ['lab-task','lab-hours','lab-memo'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('lab-cost-preview').textContent = '';
+    renderAll();
+    switchView('summary');
+  }
+}
+
+async function deleteEntry(type, id){
+  if(!confirm('この記録を削除しますか？')) return;
+  if(type==='expense'){ expenses = expenses.filter(x=>x.id!==id); await saveKey('ledger-expenses', expenses); }
+  if(type==='income'){ incomes = incomes.filter(x=>x.id!==id); await saveKey('ledger-incomes', incomes); }
+  if(type==='labor'){
+    labors = labors.filter(x=>x.id!==id);
+    expenses = expenses.filter(x=>x.laborId!==id);
+    await saveKey('ledger-labor', labors);
+    await saveKey('ledger-expenses', expenses);
+  }
+  showToast('削除しました');
+  renderAll();
+}
+
+function renderAll(){
+  const totalIncome = incomes.reduce((s,x)=>s+x.amount,0);
+  const totalExpense = expenses.reduce((s,x)=>s+x.amount,0);
+  const totalHours = labors.reduce((s,x)=>s+x.hours,0);
+
+  document.getElementById('sum-income').textContent = yen(totalIncome);
+  document.getElementById('sum-expense').textContent = yen(totalExpense);
+  document.getElementById('sum-balance').textContent = yen(totalIncome-totalExpense);
+  document.getElementById('sum-hours').textContent = totalHours + '時間';
+
+  // category breakdown
+  const catMap = {};
+  expenses.forEach(x=>{ catMap[x.category] = (catMap[x.category]||0) + x.amount; });
+  const catTbody = document.querySelector('#cat-table tbody');
+  catTbody.innerHTML = '';
+  const catKeys = Object.keys(catMap);
+  document.getElementById('cat-empty').style.display = catKeys.length ? 'none' : 'block';
+  catKeys.sort((a,b)=>catMap[b]-catMap[a]).forEach(k=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${k}</td><td style="text-align:right; font-weight:700;">${yen(catMap[k])}</td>`;
+    catTbody.appendChild(tr);
+  });
+
+  // recent transactions (income + expense)
+  const recent = [
+    ...expenses.map(x=>({...x, type:'expense'})),
+    ...incomes.map(x=>({...x, type:'income'}))
+  ].sort((a,b)=> a.date < b.date ? 1 : -1).slice(0,8);
+
+  const recentList = document.getElementById('recent-list');
+  recentList.innerHTML = '';
+  document.getElementById('recent-empty').style.display = recent.length ? 'none' : 'block';
+  recent.forEach(x=>{
+    const row = document.createElement('div');
+    row.className = 'entry-row';
+    const label = x.type==='expense' ? x.category : x.source;
+    row.innerHTML = `
+      <div>
+        <div class="entry-main">${label}${x.memo ? ' － '+escapeHtml(x.memo) : ''}</div>
+        <div class="entry-sub">${x.date}${x.by ? '　'+escapeHtml(x.by) : ''}</div>
+      </div>
+      <div class="entry-amt ${x.type==='expense'?'amt-expense':'amt-income'}">${x.type==='expense'?'－':'＋'}${yen(x.amount)}</div>
+    `;
+    recentList.appendChild(row);
+  });
+
+  renderHistory();
+}
+
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function renderHistory(){
+  const filter = document.getElementById('hist-filter').value;
+  let items = [];
+  if(filter==='all' || filter==='expense') items = items.concat(expenses.map(x=>({...x, type:'expense'})));
+  if(filter==='all' || filter==='income') items = items.concat(incomes.map(x=>({...x, type:'income'})));
+  if(filter==='all' || filter==='labor') items = items.concat(labors.map(x=>({...x, type:'labor'})));
+  items.sort((a,b)=> a.date < b.date ? 1 : -1);
+
+  const list = document.getElementById('history-list');
+  list.innerHTML = '';
+  document.getElementById('history-empty').style.display = items.length ? 'none' : 'block';
+
+  items.forEach(x=>{
+    const row = document.createElement('div');
+    row.className = 'entry-row';
+    let main, sub, amtHtml;
+    if(x.type==='expense'){
+      main = x.category + (x.memo ? ' － '+escapeHtml(x.memo) : '');
+      sub = x.date + (x.by ? '　'+escapeHtml(x.by) : '') + (x.receipt ? '　🧾'+escapeHtml(x.receipt) : '');
+      amtHtml = `<span class="entry-amt amt-expense">－${yen(x.amount)}</span>`;
+    } else if(x.type==='income'){
+      main = x.source + (x.memo ? ' － '+escapeHtml(x.memo) : '');
+      sub = x.date + (x.by ? '　'+escapeHtml(x.by) : '');
+      amtHtml = `<span class="entry-amt amt-income">＋${yen(x.amount)}</span>`;
+    } else {
+      main = escapeHtml(x.task||'作業');
+      sub = x.date + (x.memo ? '　'+escapeHtml(x.memo) : '') + (x.cost ? '　人件費 '+yen(x.cost) : '');
+      amtHtml = `<span class="entry-amt" style="color:var(--terracotta-dark);">${x.hours}時間</span>`;
+    }
+    row.innerHTML = `
+      <div>
+        <div class="entry-main">${main}</div>
+        <div class="entry-sub">${sub}</div>
+      </div>
+      <div style="display:flex; align-items:center;">
+        ${amtHtml}
+        <button class="del-btn" onclick="deleteEntry('${x.type}','${x.id}')">✕</button>
+      </div>
+    `;
+    list.appendChild(row);
+  });
+}
+
+function exportExcel(){
+  if(typeof XLSX === 'undefined'){ showToast('Excel機能の読み込みに失敗しました。通信環境を確認してください'); return; }
+
+  const expSheet = expenses.map(x=>({
+    日付:x.date, カテゴリ:x.category, 金額:x.amount, 内容:x.memo||'', レシートメモ:x.receipt||'', 入力者:x.by||''
+  }));
+  const incSheet = incomes.map(x=>({
+    日付:x.date, 項目:x.source, 金額:x.amount, 内容:x.memo||'', 入力者:x.by||''
+  }));
+  const laborSheet = labors.map(x=>({
+    日付:x.date, 作業内容:x.task||'', 作業時間:x.hours, 時給:x.rate||settings.hourlyRate, 人件費:x.cost||(x.hours*(x.rate||settings.hourlyRate)), メモ:x.memo||''
+  }));
+
+  const totalIncome = incomes.reduce((s,x)=>s+x.amount,0);
+  const totalExpense = expenses.reduce((s,x)=>s+x.amount,0);
+  const totalHours = labors.reduce((s,x)=>s+x.hours,0);
+  const totalLaborCost = labors.reduce((s,x)=>s+(x.cost||0),0);
+  const summarySheet = [
+    {項目:'総収入', 金額:totalIncome},
+    {項目:'総支出', 金額:totalExpense},
+    {項目:'収支残高', 金額:totalIncome-totalExpense},
+    {項目:'合計作業時間（時間）', 金額:totalHours},
+    {項目:'うち人件費相当額', 金額:totalLaborCost},
+    {項目:'基本時給', 金額:settings.hourlyRate},
+    {項目:'出力日', 金額:todayStr()}
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summarySheet), 'サマリー');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(expSheet), '支出');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(incSheet), '収入');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(laborSheet), '作業時間');
+
+  XLSX.writeFile(wb, `smilesoilfarm_収支_${todayStr()}.xlsx`);
+  showToast('Excelファイルをダウンロードしました');
+}
+
+// init default dates
+['exp-date','inc-date','lab-date'].forEach(id=>{ document.getElementById(id).value = todayStr(); });
+
+loadApiKeyField();
+if(IN_CLAUDE && BACKEND_URL){
+  const banner = document.getElementById('debug-banner');
+  banner.style.background = '#2A6E66';
+  document.getElementById('debug-text').textContent = 'ℹ️ Claude内で開いているため、Claude内蔵の共有ストレージを使っています（GitHub Pages版とはデータが別になります）。';
+  banner.style.display = 'block';
+}
+loadAll();
+</script>
+
+</body>
+</html>
