@@ -176,10 +176,10 @@
         <div id="scan-status"></div>
         <div style="font-size:11px; color:#5C7A8C; margin-top:6px;">※日付・金額・内容・カテゴリを自動で下に入力します。保存前に内容を確認してください。画像自体は保存されません。</div>
         <div id="apikey-box" style="display:none; margin-top:10px; padding-top:10px; border-top:1px dashed var(--terracotta);">
-          <label style="margin-top:0;">Anthropic APIキー（このブラウザにのみ保存されます）</label>
-          <input type="password" id="api-key-input" placeholder="sk-ant-...">
+          <label style="margin-top:0;">APIキー（Anthropic または Gemini、このブラウザにのみ保存されます）</label>
+          <input type="password" id="api-key-input" placeholder="sk-ant-... または AIza...">
           <button class="btn" style="background:var(--terracotta-dark); color:#fff; margin-top:8px;" onclick="saveApiKey()">APIキーを保存</button>
-          <div class="note">GitHub Pages版などClaude以外の場所でレシート読み取りを使うには、<a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>で取得したAPIキーが必要です。キーは共有バックエンドには送られず、この端末のブラウザだけに保存されます。</div>
+          <div class="note">GitHub Pages版などClaude以外の場所でレシート読み取りを使うには、APIキーが必要です。<a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Anthropic（sk-ant-…）</a>か、無料枠のある<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google Gemini（AIza…）</a>、どちらかのキーを貼ってください。鍵の形式から自動で判別します。キーは共有バックエンドには送られず、この端末のブラウザだけに保存されます。</div>
         </div>
       </div>
 
@@ -247,9 +247,9 @@
       <label>作業内容</label>
       <input type="text" id="lab-task" placeholder="例：コンポスト切り返し・種まき">
       <label>作業時間（時間）</label>
-      <input type="number" id="lab-hours" placeholder="例：2.5" min="0" step="0.5" value="2">
+      <input type="number" id="lab-hours" placeholder="例：2.5" min="0" step="0.5">
       <label>作業人数（人）</label>
-      <input type="number" id="lab-workers" placeholder="例：3" min="1" step="1" value="3">
+      <input type="number" id="lab-workers" placeholder="例：3" min="1" step="1" value="1">
       <label>メモ（任意）</label>
       <input type="text" id="lab-memo" placeholder="">
       <div class="note" id="lab-cost-preview"></div>
@@ -471,6 +471,73 @@ function saveApiKey(){
   showToast('APIキーを保存しました');
 }
 
+const RECEIPT_PROMPT =
+  'このレシート画像を読み取り、次のJSON形式のみを出力してください。説明文やコードブロック記号は一切付けないでください。\n' +
+  '{"date":"YYYY-MM-DD","amount":数値,"memo":"店名や購入内容を20文字以内で要約","category":"次の6つから最も近いもの一つ：資材費（コンポスト関連）／苗・種代／運搬費／水道光熱費／備品・工具／その他"}\n' +
+  '読み取れない項目はnullにしてください。金額は税込合計金額を数値のみで（円やカンマは付けない）。';
+
+function detectProvider(apiKey){
+  if(apiKey.startsWith('AIza')) return 'gemini';
+  return 'anthropic';
+}
+
+async function callAnthropicVision(apiKey, base64, mediaType){
+  const headers = { 'Content-Type': 'application/json' };
+  if(apiKey){
+    headers['x-api-key'] = apiKey;
+    headers['anthropic-version'] = '2023-06-01';
+    headers['anthropic-dangerous-direct-browser-access'] = 'true';
+  }
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 500,
+      messages: [{
+        role: 'user',
+        content: [
+          { type:'image', source:{ type:'base64', media_type: mediaType, data: base64 } },
+          { type:'text', text: RECEIPT_PROMPT }
+        ]
+      }]
+    })
+  });
+  if(!response.ok){
+    const errText = await response.text().catch(()=> '');
+    throw new Error(`Anthropic APIエラー ${response.status}: ${errText.slice(0,200)}`);
+  }
+  const data = await response.json();
+  const textBlock = (data.content || []).find(b => b.type === 'text');
+  if(!textBlock){ throw new Error('応答にテキストがありません'); }
+  return textBlock.text;
+}
+
+async function callGeminiVision(apiKey, base64, mediaType){
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{
+        parts: [
+          { inline_data: { mime_type: mediaType, data: base64 } },
+          { text: RECEIPT_PROMPT }
+        ]
+      }],
+      generationConfig: { responseMimeType: 'application/json' }
+    })
+  });
+  if(!response.ok){
+    const errText = await response.text().catch(()=> '');
+    throw new Error(`Gemini APIエラー ${response.status}: ${errText.slice(0,200)}`);
+  }
+  const data = await response.json();
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if(!text){ throw new Error('応答にテキストがありません'); }
+  return text;
+}
+
 async function scanReceipt(e){
   const file = e.target.files[0];
   if(!file) return;
@@ -479,55 +546,26 @@ async function scanReceipt(e){
   statusEl.textContent = '読み取り中…';
 
   let apiKey = null;
+  let provider = 'anthropic';
   if(!IN_CLAUDE){
     apiKey = localStorage.getItem('smilesoilfarm-api-key');
     if(!apiKey){
       statusEl.className = 'err';
-      statusEl.textContent = '下の欄にAnthropic APIキーを保存してから読み取ってください。';
+      statusEl.textContent = '下の欄にAPIキー（Anthropic または Gemini）を保存してから読み取ってください。';
       return;
     }
+    provider = detectProvider(apiKey);
   }
 
   try{
     const base64 = await fileToBase64(file);
     const mediaType = file.type || 'image/jpeg';
 
-    const headers = { 'Content-Type': 'application/json' };
-    if(!IN_CLAUDE){
-      headers['x-api-key'] = apiKey;
-      headers['anthropic-version'] = '2023-06-01';
-      headers['anthropic-dangerous-direct-browser-access'] = 'true';
-    }
+    const rawText = provider === 'gemini'
+      ? await callGeminiVision(apiKey, base64, mediaType)
+      : await callAnthropicVision(apiKey, base64, mediaType);
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 500,
-        messages: [{
-          role: 'user',
-          content: [
-            { type:'image', source:{ type:'base64', media_type: mediaType, data: base64 } },
-            { type:'text', text:
-              'このレシート画像を読み取り、次のJSON形式のみを出力してください。説明文やコードブロック記号は一切付けないでください。\n' +
-              '{"date":"YYYY-MM-DD","amount":数値,"memo":"店名や購入内容を20文字以内で要約","category":"次の6つから最も近いもの一つ：資材費（コンポスト関連）／苗・種代／運搬費／水道光熱費／備品・工具／その他"}\n' +
-              '読み取れない項目はnullにしてください。金額は税込合計金額を数値のみで（円やカンマは付けない）。'
-            }
-          ]
-        }]
-      })
-    });
-
-    if(!response.ok){
-      const errText = await response.text().catch(()=> '');
-      throw new Error(`API error ${response.status}: ${errText.slice(0,200)}`);
-    }
-    const data = await response.json();
-    const textBlock = (data.content || []).find(b => b.type === 'text');
-    if(!textBlock){ throw new Error('no text in response'); }
-
-    const cleaned = textBlock.text.replace(/```json|```/g, '').trim();
+    const cleaned = rawText.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(cleaned);
 
     if(parsed.date){ document.getElementById('exp-date').value = parsed.date; }
