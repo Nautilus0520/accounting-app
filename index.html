@@ -247,9 +247,9 @@
       <label>作業内容</label>
       <input type="text" id="lab-task" placeholder="例：コンポスト切り返し・種まき">
       <label>作業時間（時間）</label>
-      <input type="number" id="lab-hours" placeholder="例：2.5" min="0" step="0.5">
+      <input type="number" id="lab-hours" placeholder="例：2.5" min="0" step="0.5" value="2">
       <label>作業人数（人）</label>
-      <input type="number" id="lab-workers" placeholder="例：3" min="1" step="1" value="1">
+      <input type="number" id="lab-workers" placeholder="例：3" min="1" step="1" value="3">
       <label>メモ（任意）</label>
       <input type="text" id="lab-memo" placeholder="">
       <div class="note" id="lab-cost-preview"></div>
@@ -566,7 +566,18 @@ async function scanReceipt(e){
       : await callAnthropicVision(apiKey, base64, mediaType);
 
     const cleaned = rawText.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(cleaned);
+    let parsed;
+    try{
+      parsed = JSON.parse(cleaned);
+    } catch(parseErr){
+      const match = cleaned.match(/\{[\s\S]*\}/);
+      if(match){
+        try{ parsed = JSON.parse(match[0]); } catch(e2){ /* fall through below */ }
+      }
+      if(!parsed){
+        throw new Error(`AIの応答をJSONとして読み取れませんでした。応答内容: ${cleaned.slice(0,300)}`);
+      }
+    }
 
     if(parsed.date){ document.getElementById('exp-date').value = parsed.date; }
     if(parsed.amount){ document.getElementById('exp-amount').value = parsed.amount; }
