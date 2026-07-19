@@ -177,9 +177,9 @@
         <div style="font-size:11px; color:#5C7A8C; margin-top:6px;">※日付・金額・内容・カテゴリを自動で下に入力します。保存前に内容を確認してください。画像自体は保存されません。</div>
         <div id="apikey-box" style="display:none; margin-top:10px; padding-top:10px; border-top:1px dashed var(--terracotta);">
           <label style="margin-top:0;">APIキー（Anthropic または Gemini、このブラウザにのみ保存されます）</label>
-          <input type="password" id="api-key-input" placeholder="sk-ant-... または AIza...">
+          <input type="password" id="api-key-input" placeholder="sk-ant-... または AQ....">
           <button class="btn" style="background:var(--terracotta-dark); color:#fff; margin-top:8px;" onclick="saveApiKey()">APIキーを保存</button>
-          <div class="note">GitHub Pages版などClaude以外の場所でレシート読み取りを使うには、APIキーが必要です。<a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Anthropic（sk-ant-…）</a>か、無料枠のある<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google Gemini（AIza…）</a>、どちらかのキーを貼ってください。鍵の形式から自動で判別します。キーは共有バックエンドには送られず、この端末のブラウザだけに保存されます。</div>
+          <div class="note">GitHub Pages版などClaude以外の場所でレシート読み取りを使うには、APIキーが必要です。<a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Anthropic（sk-ant-…）</a>か、無料枠のある<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google Gemini（AQ.… または AIza…）</a>、どちらかのキーを貼ってください。鍵の形式から自動で判別します。キーは共有バックエンドには送られず、この端末のブラウザだけに保存されます。</div>
         </div>
       </div>
 
@@ -477,7 +477,7 @@ const RECEIPT_PROMPT =
   '読み取れない項目はnullにしてください。金額は税込合計金額を数値のみで（円やカンマは付けない）。';
 
 function detectProvider(apiKey){
-  if(apiKey.startsWith('AIza')) return 'gemini';
+  if(apiKey.startsWith('AIza') || apiKey.startsWith('AQ.')) return 'gemini';
   return 'anthropic';
 }
 
